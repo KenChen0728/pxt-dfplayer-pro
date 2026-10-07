@@ -1,10 +1,8 @@
 {
-    "name": "test",
-    "description": "",
+    "name": "dfplayer-pro",
+    "description": "DFPlayer Pro (DFR0768) MP3 模組，以序列埠 AT 指令控制，非官方",
     "dependencies": {
-        "core": "*",
-        "radio": "*",
-        "microphone": "*"
+        "core": "*"
     },
     "files": [
         "main.blocks",
