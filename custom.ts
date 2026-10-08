@@ -147,11 +147,31 @@ namespace dfplayerPro {
     // ===== 「更多」（進階）=====
 
     /**
+     * 依檔名播放指定檔案一次。只要輸入檔名，不用加斜線和 .mp3。
+     * 檔名請用英文、數字或底線，最多 8 個字，不要用中文或空格。
+     */
+    //% block="播放檔名 %name"
+    //% name.defl="01"
+    //% advanced=true
+    //% weight=100
+    export function playFile(name: string): void {
+        // 若多打了開頭的斜線，先去掉
+        if (name.charAt(0) == "/") {
+            name = name.substr(1)
+        }
+        // 沒有副檔名時，預設補上 .mp3
+        if (name.indexOf(".") < 0) {
+            name = name + ".mp3"
+        }
+        send("AT+PLAYFILE=/" + name)
+    }
+
+    /**
      * 切到下一個檔案。
      */
     //% block="下一首"
     //% advanced=true
-    //% weight=100
+    //% weight=95
     export function next(): void {
         send("AT+PLAY=NEXT")
     }
@@ -161,29 +181,9 @@ namespace dfplayerPro {
      */
     //% block="上一首"
     //% advanced=true
-    //% weight=95
+    //% weight=90
     export function last(): void {
         send("AT+PLAY=LAST")
-    }
-
-    /**
-     * 依檔名播放指定檔案一次，只要輸入檔名，不用加斜線和 .mp3。
-     * 檔名建議用英文或數字，大小寫要和模組裡的檔案一樣。
-     */
-    //% block="播放檔名 %name"
-    //% name.defl="test"
-    //% advanced=true
-    //% weight=90
-    export function playFile(name: string): void {
-        // 若學生自己多打了開頭的斜線，先去掉
-        if (name.charAt(0) == "/") {
-            name = name.substr(1)
-        }
-        // 沒有副檔名時，預設補上 .mp3
-        if (name.indexOf(".") < 0) {
-            name = name + ".mp3"
-        }
-        send("AT+PLAYFILE=/" + name)
     }
 
     /**
@@ -254,17 +254,13 @@ namespace dfplayerPro {
         send(on ? "AT+LED=ON" : "AT+LED=OFF")
     }
 
-    // ===== 以下為維護用（建議刪除）：暫時顯示在「更多」最下面 =====
-    // 看完之後，把這一段每個積木的 advanced=true 和 group 兩行
-    // 換成 blockHidden=true，再提交推送。
+    // ===== 不顯示在工具箱（寫 JavaScript 仍可呼叫）=====
 
     /**
      * 回傳模組對「AT」的回應，用來確認線有接對。
      */
     //% block="測試連線"
-    //% advanced=true
-    //% group="以下為維護用（建議刪除）"
-    //% weight=50
+    //% blockHidden=true
     export function testConnection(): string {
         return sendAndRead("AT")
     }
@@ -273,9 +269,7 @@ namespace dfplayerPro {
      * 回傳目前的播放模式（文字）。
      */
     //% block="查詢播放模式"
-    //% advanced=true
-    //% group="以下為維護用（建議刪除）"
-    //% weight=40
+    //% blockHidden=true
     export function queryPlayMode(): string {
         return sendAndRead("AT+PLAYMODE=?")
     }
@@ -285,9 +279,7 @@ namespace dfplayerPro {
      */
     //% block="音量變化 %delta"
     //% delta.defl=1
-    //% advanced=true
-    //% group="以下為維護用（建議刪除）"
-    //% weight=30
+    //% blockHidden=true
     export function changeVolume(delta: number): void {
         if (delta >= 0) {
             send("AT+VOL=+" + delta)
@@ -300,9 +292,7 @@ namespace dfplayerPro {
      * 刪除正在播放的檔案，無法復原。
      */
     //% block="刪除目前播放的檔案（無法復原）"
-    //% advanced=true
-    //% group="以下為維護用（建議刪除）"
-    //% weight=20
+    //% blockHidden=true
     export function deleteCurrentFile(): void {
         send("AT+DEL")
     }
@@ -312,9 +302,7 @@ namespace dfplayerPro {
      */
     //% block="設定模組鮑率 %baud（需重新上電）"
     //% baud.defl=115200
-    //% advanced=true
-    //% group="以下為維護用（建議刪除）"
-    //% weight=10
+    //% blockHidden=true
     export function setBaudrate(baud: number): void {
         send("AT+BAUDRATE=" + baud)
     }
