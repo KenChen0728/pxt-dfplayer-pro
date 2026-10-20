@@ -38,9 +38,7 @@ enum DFQuery {
     //% block="已播放時間"
     CurrentTime = 3,
     //% block="檔案總時間"
-    TotalTime = 4,
-    //% block="目前播放的檔名"
-    FileName = 5
+    TotalTime = 4
 }
 
 //% weight=100 color=#E67E22 icon="\uf001" block="DFPlayer Pro"
@@ -147,7 +145,8 @@ namespace dfplayerPro {
     // ===== 「更多」（進階）=====
 
     /**
-     * 依檔名播放指定檔案一次。只要輸入檔名，不用加斜線和 .mp3。
+     * 依檔名播放指定檔案一次，播完就停。只要輸入檔名，不用加 .mp3。
+     * 檔名要和模組裡的檔名完全一致（3 和 03 不同），找不到時會改播第一個。
      * 檔名請用英文、數字或底線，最多 8 個字，不要用中文或空格。
      */
     //% block="播放檔名 %name"
@@ -213,7 +212,22 @@ namespace dfplayerPro {
     }
 
     /**
-     * 回傳目前音量（文字）。要接在「顯示文字」之類的積木上才看得到。
+     * 在目前音量上加減，正數變大、負數變小。
+     */
+    //% block="音量增加 %delta（負數＝減小）"
+    //% delta.defl=1
+    //% advanced=true
+    //% weight=65
+    export function changeVolume(delta: number): void {
+        if (delta >= 0) {
+            send("AT+VOL=+" + delta)
+        } else {
+            send("AT+VOL=" + delta)
+        }
+    }
+
+    /**
+     * 回傳目前音量（文字，例如 VOL=[24]）。要接在「顯示文字」之類的積木上才看得到。
      */
     //% block="查詢音量"
     //% advanced=true
@@ -272,20 +286,6 @@ namespace dfplayerPro {
     //% blockHidden=true
     export function queryPlayMode(): string {
         return sendAndRead("AT+PLAYMODE=?")
-    }
-
-    /**
-     * 在目前音量上加減，正數變大、負數變小。
-     */
-    //% block="音量變化 %delta"
-    //% delta.defl=1
-    //% blockHidden=true
-    export function changeVolume(delta: number): void {
-        if (delta >= 0) {
-            send("AT+VOL=+" + delta)
-        } else {
-            send("AT+VOL=" + delta)
-        }
     }
 
     /**
