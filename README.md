@@ -1,24 +1,100 @@
+# DFPlayer Pro (DFR0768) MakeCode 擴充功能
 
-> 在 [https://kenchen0728.github.io/pxt-dfplayer-pro/](https://kenchen0728.github.io/pxt-dfplayer-pro/) 打開此頁面
+用積木控制 DFRobot DFPlayer Pro（內建 128MB、不需要 SD 卡）MP3 模組，適合 micro:bit 教學使用。
 
-## 作為擴充功能使用
+> 非 DFRobot 官方擴充功能，以序列埠 AT 指令控制模組。
 
-可以在 MakeCode 中將此儲存庫新增為**擴充功能**。
+## 如何加入
 
-* 開啟 [https://makecode.microbit.org/](https://makecode.microbit.org/)
-* 按一下**新專案**
-* 按一下工具齒輪選單下的**擴充功能**
-* 搜索 **https://github.com/kenchen0728/pxt-dfplayer-pro** 並匯出
+1. 在 MakeCode 開啟專案，點「擴展」。
+2. 貼上網址 `https://github.com/KenChen0728/pxt-dfplayer-pro`，按搜尋，點選 dfplayer-pro。
 
-## 編輯此專案
+## 接線
 
-編輯 MakeCode 中的儲存庫。
+| 模組 | micro:bit（預設） |
+|---|---|
+| TX | P1 |
+| RX | P2 |
+| 5V（VIN） | 5V |
+| GND | GND |
+| 喇叭 | L+、L-（建議 4Ω 3W） |
 
-* 開啟 [https://makecode.microbit.org/](https://makecode.microbit.org/)
-* 按一下**匯入**，然後按一下**匯入 URL**
-* 貼上 **https://github.com/kenchen0728/pxt-dfplayer-pro** 並按一下匯入
+- 積木上的「模組TX接」「模組RX接」，請依**模組上印的 TX、RX 接到哪個孔**來選，擴充功能內部會自動處理收發對調。
+- 腳位選項：P0、P1、P2、P8、P12、P13、P14、P15，皆已實測可用。
+- 若搭配 Robotbit，P0 預設接蜂鳴器，建議優先使用 P1／P2 或 P8／P12。
 
-#### 中繼資料 (用於搜索、渲染)
+## 最小範例
+
+```blocks
+dfplayerPro.init(DFPin.P1, DFPin.P2)
+dfplayerPro.setVolume(10)
+dfplayerPro.playNum(1)
+```
+
+1. 把音檔用 Type-C 線拷進模組（模組會顯示成隨身碟）。
+2. 每個程式一開始先放「初始化」，會等待約 5 秒讓模組準備好。
+3. 「播放第 n 號檔案」的編號依檔案拷貝進模組的順序。
+
+## 積木一覽
+
+**DFPlayer Pro（常用）**
+
+| 積木 | 說明 |
+|---|---|
+| 初始化 模組TX接 ＿ 模組RX接 ＿ | 每個程式一開始都要先放 |
+| 播放第 n 號檔案 | 沒有該編號時會改播第一個 |
+| 暫停／繼續播放 | 按一次暫停，再按一次繼續 |
+| 設定播放模式 | 單曲循環、全部循環、播放一次就停、隨機播放、資料夾循環 |
+| 設定音量為 | 範圍 0～30 |
+| 喇叭 開／關 | 關閉就是靜音 |
+
+**更多（進階）**
+
+| 積木 | 說明 |
+|---|---|
+| 播放檔名 | 依檔名播放一次，播完就停 |
+| 下一首／上一首 | 切換檔案 |
+| 快進 n 秒 | 負數為快退 |
+| 跳到第 n 秒開始播放 | 直接從指定秒數播放 |
+| 音量增加 | 在目前音量上加減，負數為減小 |
+| 查詢音量 | 回傳文字，例如 `VOL=[24]` |
+| 查詢 | 目前播放的檔案編號、檔案總數、已播放時間、檔案總時間（回傳文字，要接在「顯示文字」上） |
+| 提示音 | 開關模組開機提示音，設定斷電後保留 |
+| LED 指示燈 | 開關模組上的指示燈，設定斷電後保留 |
+
+## 檔名規則（播放檔名積木）
+
+- 只要輸入檔名，不用加 `.mp3`。
+- 檔名請用**英文、數字或底線，最多 8 個字**，不要用中文或空格。
+- 輸入的名字要和模組裡的檔名**完全一致**，`3` 和 `03` 視為不同檔名。
+- 找不到檔案時，模組會改播第一個檔案。
+- 檔案放在資料夾裡時，可以寫成 `A/1`。
+
+## 已知限制
+
+- 「播放檔名」只播放一次，不受播放模式影響；要循環播放請用「播放第 n 號檔案」搭配播放模式。
+- 「資料夾循環」只會在目前播放檔案所在的資料夾裡循環，需要搭配「播放第 n 號檔案」。
+- 更換模組裡的檔案之後，請把模組重新上電，檔案編號才會更新。
+- 沒有「查詢目前播放的檔名」，模組不回應這個查詢。
+- 查詢類積木回傳的是文字，不能直接拿去做數學運算。
+
+## 進階（JavaScript）
+
+下列功能不在工具箱顯示，需要時可用 JavaScript 模式呼叫：
+
+- `dfplayerPro.testConnection()`：確認線有接對
+- `dfplayerPro.queryPlayMode()`：查詢目前播放模式
+- `dfplayerPro.deleteCurrentFile()`：刪除目前播放的檔案（無法復原）
+- `dfplayerPro.setBaudrate(baud)`：改通訊速度（改了之後「初始化」會連不上）
+
+## 授權
+
+MIT
+
+## 支援的目標
 
 * for PXT/microbit
-<script src="https://makecode.com/gh-pages-embed.js"></script><script>makeCodeRender("{{ site.makecode.home_url }}", "{{ site.github.owner_name }}/{{ site.github.repository_name }}");</script>
+
+```package
+dfplayer-pro=github:KenChen0728/pxt-dfplayer-pro
+```
