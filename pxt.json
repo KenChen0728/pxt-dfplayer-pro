@@ -1,5 +1,6 @@
 {
     "name": "dfplayer-pro",
+    "version": "0.1.0",
     "description": "DFPlayer Pro (DFR0768) MP3 模組，以序列埠 AT 指令控制，非官方",
     "dependencies": {
         "core": "*"
