@@ -50,6 +50,11 @@ namespace dfplayerPro {
     let playing = false
     let stopped = false
     let lastNum = 1
+    // 目前的播放模式（1～5，對應 DFPlayMode）。不確定時用 3（播放一次就停），
+    // 因為只有這個模式歌會自己播完，需要先確認才能安全暫停。
+    let playMode = 3
+    // 是否用「播放檔名」播的（那是播一次就停，不受播放模式影響）
+    let playedByName = false
 
     // 把選單的腳位轉成 MakeCode 的序列埠腳位
     function toPin(p: DFPin): SerialPin {
@@ -125,6 +130,15 @@ namespace dfplayerPro {
         // 實測：初始化完成後模組是停著的
         playing = false
         stopped = false
+        playedByName = false
+        // 問一次目前的播放模式，之後「暫停」才能判斷要不要先確認歌有沒有播完
+        // （開機會多等約 0.6 秒）。問不到或看不懂，就維持安全的預設值 3。
+        let m = toNum(sendAndRead("AT+PLAYMODE=?"))
+        if (m >= 1 && m <= 5) {
+            playMode = m
+        } else {
+            playMode = 3
+        }
     }
 
     /**
@@ -137,6 +151,7 @@ namespace dfplayerPro {
         send("AT+PLAYNUM=" + n)
         playing = true
         stopped = false
+        playedByName = false
         lastNum = n
     }
 
@@ -150,10 +165,15 @@ namespace dfplayerPro {
         if (!playing) {
             return
         }
-        if (songFinished()) {
-            // 歌已經播完，模組其實是停著的，不要再送切換指令（會變成重播）
-            playing = false
-            return
+        // 只有「播放一次就停」（或用檔名播放）時，歌才會自己播完。
+        // 這種情況要先確認歌有沒有播完（約多等 1 秒）；
+        // 其他模式歌不會自己停，直接暫停，按下去就停。
+        if (playMode == 3 || playedByName) {
+            if (songFinished()) {
+                // 歌已經播完，模組其實是停著的，不要再送切換指令（會變成重播）
+                playing = false
+                return
+            }
         }
         send("AT+PLAY=PP")
         playing = false
@@ -197,6 +217,7 @@ namespace dfplayerPro {
     //% weight=70
     export function setPlayMode(mode: DFPlayMode): void {
         send("AT+PLAYMODE=" + mode)
+        playMode = mode
     }
 
     /**
@@ -243,6 +264,7 @@ namespace dfplayerPro {
         send("AT+PLAYFILE=/" + name)
         playing = true
         stopped = false
+        playedByName = true
     }
 
     /**
@@ -255,6 +277,7 @@ namespace dfplayerPro {
         send("AT+PLAY=NEXT")
         playing = true
         stopped = false
+        playedByName = false
     }
 
     /**
@@ -267,6 +290,7 @@ namespace dfplayerPro {
         send("AT+PLAY=LAST")
         playing = true
         stopped = false
+        playedByName = false
     }
 
     /**
