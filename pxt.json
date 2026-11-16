@@ -25,6 +25,6 @@
     "supportedTargets": [
         "microbit"
     ],
-    "preferredEditor": "tsprj",
+    "preferredEditor": "blocksprj",
     "icon": "https://raw.githubusercontent.com/KenChen0728/pxt-dfplayer-pro/master/icon.png"
 }

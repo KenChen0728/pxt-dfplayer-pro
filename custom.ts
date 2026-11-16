@@ -41,8 +41,15 @@ enum DFQuery {
     TotalTime = 4
 }
 
-//% weight=100 color=#E67E22 icon="\uf001" block="DFPlayer Pro"
+//% weight=100 color=#E67E22 icon="" block="DFPlayer Pro"
 namespace dfplayerPro {
+
+    // ===== 播放狀態記錄（學生看不到）=====
+    // 模組只有「播放／暫停切換」一個指令，不會回報現在的狀態，
+    // 所以由程式自己記：程式以為現在有沒有在播、有沒有按過「停止」、最後播的檔案編號。
+    let playing = false
+    let stopped = false
+    let lastNum = 1
 
     // 把選單的腳位轉成 MakeCode 的序列埠腳位
     function toPin(p: DFPin): SerialPin {
@@ -73,6 +80,30 @@ namespace dfplayerPro {
         return serial.readString()
     }
 
+    // 從回應文字裡取出第一串數字，取不到回傳 -1
+    function toNum(s: string): number {
+        let n = 0
+        let found = false
+        for (let i = 0; i < s.length; i++) {
+            let c = s.charCodeAt(i)
+            if (c >= 48 && c <= 57) {
+                n = n * 10 + (c - 48)
+                found = true
+            } else if (found) {
+                break
+            }
+        }
+        return found ? n : -1
+    }
+
+    // 歌是不是已經自然播完：已播放時間 ≥ 檔案總時間
+    // （實測「播放一次就停」播完後，已播放時間會停在總時間）
+    function songFinished(): boolean {
+        let cur = toNum(sendAndRead("AT+QUERY=3"))
+        let tot = toNum(sendAndRead("AT+QUERY=4"))
+        return cur >= 0 && tot > 0 && cur >= tot
+    }
+
     // ===== 主分類（學生常用）=====
 
     /**
@@ -91,6 +122,9 @@ namespace dfplayerPro {
         send("AT+PLAY=PP")
         send("AT+PLAY=PP")
         send("AT+AMP=ON")
+        // 實測：初始化完成後模組是停著的
+        playing = false
+        stopped = false
     }
 
     /**
@@ -101,15 +135,59 @@ namespace dfplayerPro {
     //% weight=90
     export function playNum(n: number): void {
         send("AT+PLAYNUM=" + n)
+        playing = true
+        stopped = false
+        lastNum = n
     }
 
     /**
-     * 播放中按一次會暫停，再按一次繼續。
+     * 暫停播放，停在目前的位置。已經暫停時不會有動作，放在「重複無限次」裡也只會暫停一次。
+     * 歌如果已經自然播完，也不會再送出指令。
      */
-    //% block="暫停／繼續播放"
-    //% weight=80
-    export function pausePlay(): void {
+    //% block="暫停"
+    //% weight=82
+    export function pause(): void {
+        if (!playing) {
+            return
+        }
+        if (songFinished()) {
+            // 歌已經播完，模組其實是停著的，不要再送切換指令（會變成重播）
+            playing = false
+            return
+        }
         send("AT+PLAY=PP")
+        playing = false
+    }
+
+    /**
+     * 從暫停的地方接著播放。按過「停止」之後，會從頭開始播。
+     * 正在播放時不會有動作。
+     */
+    //% block="繼續播放"
+    //% weight=81
+    export function resume(): void {
+        if (stopped) {
+            stopped = false
+            playNum(lastNum)
+        } else if (!playing) {
+            send("AT+PLAY=PP")
+            playing = true
+        }
+    }
+
+    /**
+     * 停止播放。之後按「繼續播放」會從頭開始。
+     */
+    //% block="停止"
+    //% weight=79
+    export function stop(): void {
+        pause()
+        // 先問模組現在播第幾個，這樣用過「下一首」「上一首」也能從正確的檔案重播
+        let n = toNum(sendAndRead("AT+QUERY=1"))
+        if (n > 0) {
+            lastNum = n
+        }
+        stopped = true
     }
 
     /**
@@ -163,6 +241,8 @@ namespace dfplayerPro {
             name = name + ".mp3"
         }
         send("AT+PLAYFILE=/" + name)
+        playing = true
+        stopped = false
     }
 
     /**
@@ -173,6 +253,8 @@ namespace dfplayerPro {
     //% weight=95
     export function next(): void {
         send("AT+PLAY=NEXT")
+        playing = true
+        stopped = false
     }
 
     /**
@@ -183,6 +265,8 @@ namespace dfplayerPro {
     //% weight=90
     export function last(): void {
         send("AT+PLAY=LAST")
+        playing = true
+        stopped = false
     }
 
     /**
@@ -269,6 +353,17 @@ namespace dfplayerPro {
     }
 
     // ===== 不顯示在工具箱（寫 JavaScript 仍可呼叫）=====
+
+    /**
+     * 舊版的「暫停／繼續播放」切換積木，每按一次就切換一次。
+     * 已改用「暫停」「繼續播放」「停止」三個積木；這個保留是為了讓舊程式不會壞掉。
+     */
+    //% block="暫停／繼續播放（舊）"
+    //% blockHidden=true
+    export function pausePlay(): void {
+        send("AT+PLAY=PP")
+        playing = !playing
+    }
 
     /**
      * 回傳模組對「AT」的回應，用來確認線有接對。
