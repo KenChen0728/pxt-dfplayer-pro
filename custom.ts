@@ -55,6 +55,12 @@ namespace dfplayerPro {
     let playMode = 3
     // 是否用「播放檔名」播的（那是播一次就停，不受播放模式影響）
     let playedByName = false
+    // 「播放一次就停」時用來估計歌播到哪裡，這樣暫停就不用先問模組：
+    // 檔案總時間（毫秒，-1＝不知道）、已播放的累計毫秒、這一段開始播的時間、位置有沒有把握
+    let totalMs = -1
+    let playedMs = 0
+    let segStart = 0
+    let posKnown = false
 
     // 把選單的腳位轉成 MakeCode 的序列埠腳位
     function toPin(p: DFPin): SerialPin {
@@ -78,11 +84,23 @@ namespace dfplayerPro {
     }
 
     // 送出指令並讀取回應（內部使用）
+    // 不再固定等 0.6 秒：每 20 毫秒看一次，收到回應、而且回應已經傳完（下一次沒有新資料）就往下走。
+    // 模組一直沒回應時，最多等 0.6 秒，和舊版一樣。
     function sendAndRead(cmd: string): string {
         serial.readString()
         serial.writeString(cmd + "\r\n")
-        basic.pause(600)
-        return serial.readString()
+        let buf = ""
+        let t0 = input.runningTime()
+        while (input.runningTime() - t0 < 600) {
+            basic.pause(20)
+            let part = serial.readString()
+            if (part.length > 0) {
+                buf = buf + part
+            } else if (buf.length > 0) {
+                break
+            }
+        }
+        return buf
     }
 
     // 從回應文字裡取出第一串數字，取不到回傳 -1
@@ -101,12 +119,20 @@ namespace dfplayerPro {
         return found ? n : -1
     }
 
-    // 歌是不是已經自然播完：已播放時間 ≥ 檔案總時間
-    // （實測「播放一次就停」播完後，已播放時間會停在總時間）
-    function songFinished(): boolean {
-        let cur = toNum(sendAndRead("AT+QUERY=3"))
-        let tot = toNum(sendAndRead("AT+QUERY=4"))
-        return cur >= 0 && tot > 0 && cur >= tot
+    // 要播新檔案前呼叫：重新開始計算播放位置
+    function markStart(): void {
+        playedMs = 0
+        segStart = input.runningTime()
+        posKnown = true
+        totalMs = -1
+    }
+
+    // 新檔案開始播之後呼叫：只有「播放一次就停」才需要記下檔案總時間
+    function readTotal(): void {
+        if (playMode == 3 || playedByName) {
+            let t = toNum(sendAndRead("AT+QUERY=4"))
+            totalMs = t > 0 ? t * 1000 : -1
+        }
     }
 
     // ===== 主分類（學生常用）=====
@@ -131,6 +157,8 @@ namespace dfplayerPro {
         playing = false
         stopped = false
         playedByName = false
+        posKnown = false
+        totalMs = -1
         // 問一次目前的播放模式，之後「暫停」才能判斷要不要先確認歌有沒有播完
         // （開機會多等約 0.6 秒）。問不到或看不懂，就維持安全的預設值 3。
         let m = toNum(sendAndRead("AT+PLAYMODE=?"))
@@ -148,11 +176,13 @@ namespace dfplayerPro {
     //% n.min=1 n.defl=1
     //% weight=90
     export function playNum(n: number): void {
+        markStart()
         send("AT+PLAYNUM=" + n)
         playing = true
         stopped = false
         playedByName = false
         lastNum = n
+        readTotal()
     }
 
     /**
@@ -165,14 +195,35 @@ namespace dfplayerPro {
         if (!playing) {
             return
         }
-        // 只有「播放一次就停」（或用檔名播放）時，歌才會自己播完。
-        // 這種情況要先確認歌有沒有播完（約多等 1 秒）；
-        // 其他模式歌不會自己停，直接暫停，按下去就停。
+        // 只有「播放一次就停」（或用檔名播放）時，歌才會自己播完，暫停前要小心：
+        // 在歌自然播完後再送暫停，模組會當成切換而重播。
+        // 做法：播放時已記下檔案總時間，並用 micro:bit 的時鐘估算播到哪裡。
+        //   離結尾超過 2 秒 → 直接暫停（不用等）
+        //   已經超過結尾 1 秒 → 歌一定播完了，不送指令（不用等）
+        //   只有剛好在結尾前後這 3 秒，或不知道總時間時，才問模組一次（約 0.6 秒）
         if (playMode == 3 || playedByName) {
-            if (songFinished()) {
-                // 歌已經播完，模組其實是停著的，不要再送切換指令（會變成重播）
+            let est = playedMs + (input.runningTime() - segStart)
+            if (posKnown && totalMs > 0 && est < totalMs - 2000) {
+                playedMs = est
+            } else if (posKnown && totalMs > 0 && est > totalMs + 1000) {
                 playing = false
                 return
+            } else {
+                let cur = toNum(sendAndRead("AT+QUERY=3"))
+                let tot = totalMs > 0 ? Math.idiv(totalMs, 1000) : toNum(sendAndRead("AT+QUERY=4"))
+                if (cur >= 0 && tot > 0 && cur >= tot) {
+                    // 歌已經播完，模組其實是停著的，不要再送切換指令（會變成重播）
+                    playing = false
+                    return
+                }
+                if (cur >= 0 && tot > 0) {
+                    // 用模組回報的位置校正自己的估算
+                    totalMs = tot * 1000
+                    playedMs = cur * 1000
+                    posKnown = true
+                } else {
+                    posKnown = false
+                }
             }
         }
         send("AT+PLAY=PP")
@@ -190,6 +241,7 @@ namespace dfplayerPro {
             stopped = false
             playNum(lastNum)
         } else if (!playing) {
+            segStart = input.runningTime()
             send("AT+PLAY=PP")
             playing = true
         }
@@ -218,6 +270,7 @@ namespace dfplayerPro {
     export function setPlayMode(mode: DFPlayMode): void {
         send("AT+PLAYMODE=" + mode)
         playMode = mode
+        totalMs = -1
     }
 
     /**
@@ -261,10 +314,12 @@ namespace dfplayerPro {
         if (name.indexOf(".") < 0) {
             name = name + ".mp3"
         }
+        markStart()
         send("AT+PLAYFILE=/" + name)
         playing = true
         stopped = false
         playedByName = true
+        readTotal()
     }
 
     /**
@@ -274,10 +329,12 @@ namespace dfplayerPro {
     //% advanced=true
     //% weight=95
     export function next(): void {
+        markStart()
         send("AT+PLAY=NEXT")
         playing = true
         stopped = false
         playedByName = false
+        readTotal()
     }
 
     /**
@@ -287,10 +344,12 @@ namespace dfplayerPro {
     //% advanced=true
     //% weight=90
     export function last(): void {
+        markStart()
         send("AT+PLAY=LAST")
         playing = true
         stopped = false
         playedByName = false
+        readTotal()
     }
 
     /**
@@ -301,6 +360,13 @@ namespace dfplayerPro {
     //% advanced=true
     //% weight=80
     export function seekBy(sec: number): void {
+        // 播放中：直接把估算位置往前或往後移；暫停中不確定模組會怎麼做，改成不確定
+        if (playing) {
+            playedMs = Math.max(0, playedMs + (input.runningTime() - segStart) + sec * 1000)
+            segStart = input.runningTime()
+        } else {
+            posKnown = false
+        }
         if (sec >= 0) {
             send("AT+TIME=+" + sec)
         } else {
@@ -316,6 +382,12 @@ namespace dfplayerPro {
     //% advanced=true
     //% weight=75
     export function seekTo(sec: number): void {
+        if (playing) {
+            playedMs = Math.max(0, sec * 1000)
+            segStart = input.runningTime()
+        } else {
+            posKnown = false
+        }
         send("AT+TIME=" + sec)
     }
 
