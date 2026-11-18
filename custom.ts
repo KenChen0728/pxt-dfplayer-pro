@@ -77,22 +77,46 @@ namespace dfplayerPro {
         }
     }
 
-    // 送出指令，結尾固定為 \r\n，送完等待讓模組處理
+    // 同一時間只讓一段程式跟模組說話（按鈕和迴圈同時送指令時，回應才不會被別人讀走）
+    let busy = false
+
+    function lock(): void {
+        while (busy) {
+            basic.pause(5)
+        }
+        busy = true
+    }
+
+    // 送出指令，結尾固定為 \r\n。
+    // 實測模組處理完約 0.05 秒會回「OK」，收到就往下走；
+    // 沒收到時最多等 0.5 秒（和舊版一樣）。
     function send(cmd: string): void {
+        lock()
+        serial.readString()
         serial.writeString(cmd + "\r\n")
-        basic.pause(500)
+        let buf = ""
+        let t0 = input.runningTime()
+        while (input.runningTime() - t0 < 500) {
+            basic.pause(5)
+            buf = buf + serial.readString()
+            if (buf.indexOf("OK") >= 0) {
+                break
+            }
+        }
+        busy = false
     }
 
     // 送出指令並讀取回應（內部使用）
-    // 不再固定等 0.6 秒：每 20 毫秒看一次，收到回應、而且回應已經傳完（下一次沒有新資料）就往下走。
-    // 模組一直沒回應時，最多等 0.6 秒，和舊版一樣。
+    // 每 10 毫秒看一次，收到回應、而且回應已經傳完（下一次沒有新資料）就往下走；
+    // 模組一直沒回應時，最多等 0.6 秒。
     function sendAndRead(cmd: string): string {
+        lock()
         serial.readString()
         serial.writeString(cmd + "\r\n")
         let buf = ""
         let t0 = input.runningTime()
         while (input.runningTime() - t0 < 600) {
-            basic.pause(20)
+            basic.pause(10)
             let part = serial.readString()
             if (part.length > 0) {
                 buf = buf + part
@@ -100,6 +124,7 @@ namespace dfplayerPro {
                 break
             }
         }
+        busy = false
         return buf
     }
 
